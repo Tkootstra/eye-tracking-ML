@@ -5,38 +5,14 @@ Created on Mon Oct 22 14:07:29 2018
 @author: timok
 """
 
-import json
 import pandas as pd
 import numpy as np
-import os.path, os
-import matplotlib.pyplot as plt
-from glob import glob
-from multiprocessing import Pool
-import itertools
-import random
-import seaborn as sns
-from scipy import interp
 import warnings
-from scipy import stats
-from functools import partial
-from statistics import mean
-
 from sklearn.preprocessing import LabelBinarizer
-
 from sklearn.preprocessing import StandardScaler
-
-
-
-
-
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.exceptions import DataConversionWarning
 warnings.filterwarnings(action='ignore', category=DataConversionWarning)
-
-
-
 from sklearn.metrics import make_scorer
-
 
 
 
@@ -57,30 +33,23 @@ def customAUC(y_test, preds):
 
 my_auc = make_scorer(customAUC, greater_is_better=True, needs_proba=True)
 
-# hier een nieuwe split maken als iterable: die kun je dan als CV meegeven in sklearn CV methodes
-    
-
 dataframe_kFold_split = pd.read_csv('CV_split.csv')# 1.5% margin
 
 input_features = [x for x in dataframe_kFold_split.columns if 'fix' in x or 'sacc' in x]
 output_feature = 'trialtype'
 
-CV_iterator = []
-
-
 dataframe_kFold_split = dataframe_kFold_split.reset_index()
 
-for x in range(1,11):
-    trainIndices = dataframe_kFold_split[dataframe_kFold_split['cat'] != x].index.values.astype(int)
-    validationIndices = dataframe_kFold_split[dataframe_kFold_split['cat'] == x].index.values.astype(int)
-    CV_iterator.append((trainIndices, validationIndices))
+def makeCViterable(dataframe): # make iterable of splits for sklearn CV implementation
+    CV_iterator = []
+    for x in range(1,dataframe['cat'].nunique() +1):
+        trainIndices = dataframe[dataframe['cat'] != x].index.values.astype(int)
+        validationIndices = dataframe[dataframe['cat'] == x].index.values.astype(int)
+        CV_iterator.append((trainIndices, validationIndices))
+    return CV_iterator
 
+CV_iterator = makeCViterable(dataframe_kFold_split)
 
-
-from scipy.stats import randint as sp_randint
-from sklearn.model_selection import RandomizedSearchCV
-from sklearn.metrics import auc
-from sklearn.neural_network import MLPClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import make_pipeline
 
@@ -94,8 +63,6 @@ from skopt.searchcv import BayesSearchCV
 from sklearn.model_selection import cross_val_score
 
 
-
-
 X = dataframe_kFold_split[input_features]
 
 y = dataframe_kFold_split[output_feature]
@@ -105,14 +72,10 @@ y = binarizer.fit_transform(y)
 
 
 space = [Categorical(['uniform','distance'], name='weights'),
-         
          Integer(5,100, name= 'leaf_size'),
-         Integer(1,2, name='p')
-         
-         ,Categorical(['ball_tree', 'kd_tree'], name= 'algorithm'),
-         Integer(1,1000, name='n_neighbors')
-         
-         ]
+         Integer(1,2, name='p'),
+         Categorical(['ball_tree', 'kd_tree'], name= 'algorithm'),
+         Integer(1,1000, name='n_neighbors')]
 
 
 
@@ -139,13 +102,7 @@ best_model = KNeighborsClassifier(n_neighbors=best_params[4], weights = best_par
 , leaf_size=best_params[1], p=best_params[2], algorithm=best_params[3])
 
 print(best_model)
-#best_params = (""" Best params: \n activation=% \n alpha=%.6f \n hidden_layer_sizes=%d
-#      max_iter=% """ % (estimator_gaussian_process.x[0],
-#                                                                                                           estimator_gaussian_process.x[1],
-#                                                                                                           estimator_gaussian_process.x[2],
-#                                                                                                           estimator_gaussian_process.x[3]))
-#
-#print(best_params)
+
 from skopt import dump
 
 dump(estimator_gaussian_process, 'KNN_Bayesian_results.pkl')
